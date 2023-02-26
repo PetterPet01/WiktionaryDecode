@@ -1,4 +1,5 @@
-﻿using System.Text.RegularExpressions;
+﻿using System.Diagnostics;
+using System.Text.RegularExpressions;
 
 namespace WiktionaryDecodeTest1
 {
@@ -103,7 +104,7 @@ namespace WiktionaryDecodeTest1
                 string value = m.Groups[0].Value;
                 value = Regex.Replace(value, @"{{|}}", "");
                 value = "(" + value.Trim().Split('|').Last() + ")";
-                text = rgx1.Replace(@"{{.*?}}", value, 1);
+                text = rgx1.Replace(text, value, 1);
             }
 
             Regex rgx2 = new Regex(@"\[\[.*?\]\]");
@@ -114,7 +115,7 @@ namespace WiktionaryDecodeTest1
                 value = "" + value.Trim().Split('|').Last() + "";
                 if (value == "\\")
                     value = "\\\\";
-                text = rgx2.Replace(@"\[\[.*?\]\]", value, 1);
+                text = rgx2.Replace(text, value, 1);
             }
 
             text = Regex.Replace(text, @"\[\[|\]\]", "");
@@ -434,13 +435,18 @@ namespace WiktionaryDecodeTest1
                 return null;
         }
 
+        static int page = 0;
+
         static List<Sense>? ProcessPage(IEnumerable<string> lines)
         {
+            if (++page % 10000 == 0)
+                Debug.WriteLine(page);
+
             List<Sense> senses = new List<Sense>();
 
-            string title = lines.Where(line => line.StartsWith("<title>")).Select(line => line.Replace("<title>", "").Replace("</title>", "")).First();
+            string? title = lines.Where(line => line.StartsWith("<title>")).Select(line => line.Replace("<title>", "").Replace("</title>", "")).FirstOrDefault();
 
-            if (Regex.Match(title, @"^\w*?:").Success) return null;
+            if (title == null || Regex.Match(title, @"^\w*?:").Success) return null;
 
             List<string> tmpLines = new List<string>();
             foreach (string line in lines)
@@ -567,9 +573,9 @@ namespace WiktionaryDecodeTest1
             return (senses, quotes, examples);
         }
 
-        public (List<Sense> senses, List<Quotation> quotes, List<Example> examples) ReadWiktionary(string filename)
+        public static (List<Sense> senses, List<Quotation> quotes, List<Example> examples) ReadWiktionary(string filename)
         {
-            string[] f = File.ReadAllLines(filename);
+            IEnumerable<string> f = File.ReadLines(filename);
 
             List<string> currPages = new List<string>();
             bool isPage = false;
@@ -583,8 +589,8 @@ namespace WiktionaryDecodeTest1
                     isPage = true;
                 else if (line == "</page>")
                 {
-                    Sense? s = ProcessSense(currPages);
-                    if (s != null) senses.Add(s);
+                    List<Sense>? s = ProcessPage(currPages);
+                    if (s != null) senses.AddRange(s);
                     isPage = false;
                     currPages = new List<string>();
                 }
