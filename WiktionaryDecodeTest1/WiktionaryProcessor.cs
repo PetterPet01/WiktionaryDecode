@@ -566,5 +566,33 @@ namespace WiktionaryDecodeTest1
 
             return (senses, quotes, examples);
         }
+
+        public (List<Sense> senses, List<Quotation> quotes, List<Example> examples) ReadWiktionary(string filename)
+        {
+            string[] f = File.ReadAllLines(filename);
+
+            List<string> currPages = new List<string>();
+            bool isPage = false;
+
+            List<Sense> senses = new List<Sense>();
+
+            foreach (string l in f)
+            {
+                string line = l.Trim();
+                if (line == "<page>")
+                    isPage = true;
+                else if (line == "</page>")
+                {
+                    Sense? s = ProcessSense(currPages);
+                    if (s != null) senses.Add(s);
+                    isPage = false;
+                    currPages = new List<string>();
+                }
+                else
+                    if (isPage & line.Length > 0) currPages.Add(line);
+            }
+
+            return PostProcessing(senses);
+        }
     }
 }
