@@ -23,13 +23,13 @@ namespace WiktionaryDecodeTest1
         public string pos { get; set; }
         public List<string> tags { get; set; }
         public List<string>? examples { get; set; }
-        public Dictionary<string, List<string>>? quotations { get; set; }
+        public List<KeyValuePair<string, List<string>>>? quotations { get; set; }
         public List<string> synonyms { get; set; }
         public int depth { get; set; }
 
         public Sense(string word, string gloss, string pos,
             List<string> tags, List<string> examples,
-            Dictionary<string, List<string>> quotations, List<string> synonyms,
+            List<KeyValuePair<string, List<string>>> quotations, List<string> synonyms,
             int depth)
         {
             this.word = word;
@@ -79,6 +79,8 @@ namespace WiktionaryDecodeTest1
             return LongestCommonSubstring.GetLongestCommonSubsequence(one, two, ignoreCase);
         }
 
+        static int errorCount = 0;
+
         static string CleanText(string text, string matchSense = "")
         {
             text = Regex.Replace(text, @"\[\[Category:.*?\]\]", "");
@@ -113,8 +115,7 @@ namespace WiktionaryDecodeTest1
                 string value = m.Groups[0].Value;
                 value = Regex.Replace(value, @"\[\[|\]\]", "");
                 value = "" + value.Trim().Split('|').Last() + "";
-                if (value == "\\")
-                    value = "\\\\";
+                if (value == "\\") value = "\\\\";
                 text = rgx2.Replace(text, value, 1);
             }
 
@@ -131,7 +132,6 @@ namespace WiktionaryDecodeTest1
                 {
                     string value = m.Groups[0].Value;
                     value = Regex.Replace(value, @"\'\'\'", "");
-                    value = "" + value.Trim().Split('|').Last() + "";
 
                     if (value.Length > 0 && ((lcs(value, word, true).Length / value.Length) > MIN_MENTION_RATIO))
                         text = rgx3.Replace(text, "<WSD>" + value + "</WSD>", 1);
@@ -141,16 +141,16 @@ namespace WiktionaryDecodeTest1
             }
 
             text = Regex.Replace(text, "’", "'");
-            text = Regex.Replace(text, "&quot;", "\"");
-            text = Regex.Replace(text, "(?<!\')\'{2}(?!\')", "\"");
-            text = Regex.Replace(text, "&ldquo;|&rdquo;", "\"");
+            text = Regex.Replace(text, @"&quot;", "\"");
+            text = Regex.Replace(text, @"(?<!\')\'{2}(?!\')", "\"");
+            text = Regex.Replace(text, @"&ldquo;|&rdquo;", "\"");
 
             text = string.Join(' ', text.Split(' ').Select(t => t.Trim()));
 
             text = text.Trim();
             if (matchSense != "")
             {
-                string context = Regex.Replace(text, "<WSD>.*?</WSD>", "");
+                string context = Regex.Replace(text, @"<WSD>.*?</WSD>", "");
                 if (text.Contains("<WSD>") && context.Contains(" "))
                     return text;
                 else
@@ -168,7 +168,7 @@ namespace WiktionaryDecodeTest1
                 pos: pos,
                 tags: new List<string>(),
                 examples: new List<string>(),
-                quotations: new Dictionary<string, List<string>>(),
+                quotations: new List<KeyValuePair<string, List<string>>>(),
                 synonyms: new List<string>(),
                 depth: -1
             );
@@ -211,16 +211,16 @@ namespace WiktionaryDecodeTest1
             string synStr = Regex.Replace(line, @"#*?: {{syn", "");
             IEnumerable<string> syn = Regex.Replace(synStr, "}}", "").Split('|').Skip(1);
             if (syn.First() == "en")
-                syn = syn.Skip(1).ToArray();
+                syn = syn.Skip(1);
             syn = syn.Where(s => !s.Contains("Thesaurus:"));
 
             return syn;
         }
 
-        static (string? q, IEnumerable<string>? qTags) ProcessQuotation(string line)
+        static (string? q, IEnumerable<string>? qTags) ProcessQuotation(string line2)
         {
             string[] quoteFlags = new string[] { "passage=", "text=" };
-            line = Regex.Replace(line, "#*?\\*:?", "");
+            string line = Regex.Replace(line2, @"#*?\*:?", "");
 
             if (line.ToLower().Contains("seemorecites"))
                 return (null, null);
@@ -236,17 +236,17 @@ namespace WiktionaryDecodeTest1
                 else
                     q = qTemp.ElementAt(1);
 
-                if (Regex.Match(qTemp.First(), "{{.*?}}").Success)
+                if (Regex.Match(q, @"{{.*?}}").Success)
                 {
-                    q = Regex.Replace(q, "{{|}}", "");
+                    q = Regex.Replace(q, @"{{|}}", "");
                     q = q.Split('|').Last();
-                    q = Regex.Replace(q, "r'passage=|text=", "");
+                    q = Regex.Replace(q, @"passage=|text=", "");
                 }
             }
-            else if (Regex.Match(line, "&lt;ref&gt;.*?&lt;/ref&gt;").Success)
+            else if (Regex.Match(line, @"&lt;ref&gt;.*?&lt;/ref&gt;").Success)
             {
-                qTags = new string[1] { Regex.Match(line, "&lt;ref&gt;(.*?)&lt;/ref&gt;").Groups[1].Value };
-                q = Regex.Replace(line, "&lt;ref&gt;.*?&lt;/ref&gt;", "");
+                qTags = new string[1] { Regex.Match(line, @"&lt;ref&gt;(.*?)&lt;/ref&gt;").Groups[1].Value };
+                q = Regex.Replace(line, @"&lt;ref&gt;.*?&lt;/ref&gt;", "");
             }
             else if (Regex.Match(line, "{{.*?}}").Success)
             {
@@ -256,12 +256,12 @@ namespace WiktionaryDecodeTest1
                 IEnumerable<string> qTemp = qTags.Where(t => t.ToLower().StartsWith(quoteFlags));
                 if (qTemp.Count() > 0)
                 {
-                    q = Regex.Replace(qTemp.First(), "r'passage=|text=", "");
-                    qTags = qTags.Where(t => t.ToLower().StartsWith(quoteFlags));
+                    q = Regex.Replace(qTemp.First(), @"passage=|text=", "");
+                    qTags = qTags.Where(t => !t.ToLower().StartsWith(quoteFlags));
                 }
                 else
                 {
-                    qTemp = qTags.Where(t => Regex.Match(t, "^.*?=").Success);
+                    qTemp = qTags.Where(t => !Regex.Match(t, "^.*?=").Success);
                     if (qTemp.Count() > 0)
                     {
                         q = qTemp.Last();
@@ -274,12 +274,12 @@ namespace WiktionaryDecodeTest1
 
             else
             {
-                line = Regex.Replace(line, @"(?<!\')\'{2}(?!\')", "\'");
-                if (Regex.Match(line, @""".*?""").Success)
+                line = Regex.Replace(line, @"(?<!\')\'{2}(?!\')", "\"");
+                if (Regex.Match(line, "\".*?\"").Success)
                 {
-                    q = Regex.Match(line, @""".*?""").Groups[0].Value;
+                    q = Regex.Match(line, "\".*?\"").Groups[0].Value;
                     q = Regex.Replace(q, "\"", "");
-                    qTags = new string[1] { Regex.Replace(line, @""".*?""", "") };
+                    qTags = new string[1] { Regex.Replace(line, "\".*?\"", "") };
                 }
                 else
                 {
@@ -289,7 +289,9 @@ namespace WiktionaryDecodeTest1
             }
 
             if (q.Count() > CHAR_THRESHOLD && q.Contains(' '))
+            {
                 return (q, qTags);
+            }
             else
                 return (null, null);
         }
@@ -341,22 +343,22 @@ namespace WiktionaryDecodeTest1
 
             foreach (string line in lines)
             {
-                if (Regex.Matches(line, @"#*?: {{ux").IsReadOnly)
+                if (Regex.Match(line, @"#*?: {{ux").Success)
                 {
                     string? ex = ProcessExample(line);
                     if (ex != null)
                         sense.examples!.Add(ex);
-                    else if (Regex.Match(line, @"#*?: {{syn").Success)
-                    {
-                        IEnumerable<string> syn = ProcessSynonym(line);
-                        sense.synonyms.AddRange(syn);
-                    }
-                    else if (Regex.Match(line, @"#*?\* ").Success)
-                    {
-                        (string? q, IEnumerable<string>? qTags) = ProcessQuotation(line);
-                        if (q != null)
-                            sense.quotations!.Add(q, qTags!.ToList());
-                    }
+                }
+                else if (Regex.Match(line, @"#*?: {{syn").Success)
+                {
+                    IEnumerable<string> syn = ProcessSynonym(line);
+                    sense.synonyms.AddRange(syn);
+                }
+                else if (Regex.Match(line, @"#*?\* ").Success)
+                {
+                    (string? q, IEnumerable<string>? qTags) = ProcessQuotation(line);
+                    if (q != null)
+                        sense.quotations!.Add(new KeyValuePair<string, List<string>>(q, qTags!.ToList()));
                 }
             }
 
@@ -452,9 +454,9 @@ namespace WiktionaryDecodeTest1
             foreach (string line in lines)
             {
                 string tmpLine = Regex.Replace(line, @"<.*?>.*?</.*?>", "");
-                tmpLine = Regex.Replace(line, @"<.*?>", "");
+                tmpLine = Regex.Replace(tmpLine, @"<.*?>", "");
                 tmpLine = tmpLine.Trim();
-                if (tmpLine.Length != 0) tmpLines.Add(line);
+                if (tmpLine.Length != 0) tmpLines.Add(tmpLine);
             }
             if (tmpLines.Count == 0) return null;
             else lines = tmpLines;
@@ -512,9 +514,9 @@ namespace WiktionaryDecodeTest1
         static string GenerateWordKey(Sense sense)
         {
             if (sense.pos == "proper noun")
-                return string.Format("{}.{}", sense.word.ToLower().Replace(" ", "_"), "noun");
+                return string.Format("{0}.{1}", sense.word.ToLower().Replace(" ", "_"), "noun");
             else
-                return string.Format("{}.{}", sense.word.ToLower().Replace(" ", "_"), sense.pos);
+                return string.Format("{0}.{1}", sense.word.ToLower().Replace(" ", "_"), sense.pos);
         }
 
         public static (List<Sense> senses, List<Quotation> quotes, List<Example> examples) PostProcessing(List<Sense> senses)
@@ -522,7 +524,7 @@ namespace WiktionaryDecodeTest1
             List<Quotation> quotes = new List<Quotation>();
             List<Example> examples = new List<Example>();
 
-            string[] wordKeys = senses.Select(s => GenerateWordKey(s)).ToArray();
+            IEnumerable<string> wordKeys = senses.Select(s => GenerateWordKey(s)).Distinct();
             Dictionary<string, int> wordIdxs = new Dictionary<string, int>();
             foreach (string w in wordKeys)
                 wordIdxs.Add(w, 0);
@@ -530,7 +532,7 @@ namespace WiktionaryDecodeTest1
             foreach (Sense s in senses)
             {
                 string wordK = GenerateWordKey(s);
-                string sId = string.Format("{}.{}", wordK, wordIdxs[wordK]);
+                string sId = string.Format("{0}.{1}", wordK, wordIdxs[wordK]);
                 wordIdxs[wordK] += 1;
 
                 s.senseId = sId;
