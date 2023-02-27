@@ -9,7 +9,7 @@ namespace WiktionaryDecodeTest1
 
         private void button1_Click(object sender, EventArgs e)
         {
-            WiktionaryProcessor.ReadWiktionary(@"F:\enwiktionary-20230220-pages-articles-multistream.xml");
+            WiktionaryProcessor.ReadWiktionary(@"E:\WiktionaryEnglishResult.json", true);
         }
     }
 }

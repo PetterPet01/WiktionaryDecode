@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using Newtonsoft.Json;
+using System.Diagnostics;
 using System.Text.RegularExpressions;
 
 namespace WiktionaryDecodeTest1
@@ -79,8 +80,9 @@ namespace WiktionaryDecodeTest1
             return LongestCommonSubstring.GetLongestCommonSubsequence(one, two, ignoreCase);
         }
 
-        static int errorCount = 0;
-
+        static Regex rgx1 = new Regex(@"{{.*?}}", RegexOptions.Compiled);
+        static Regex rgx2 = new Regex(@"\[\[.*?\]\]", RegexOptions.Compiled);
+        static Regex rgx3 = new Regex(@"\'\'\'.*?\'\'\'", RegexOptions.Compiled);
         static string CleanText(string text, string matchSense = "")
         {
             text = Regex.Replace(text, @"\[\[Category:.*?\]\]", "");
@@ -100,7 +102,6 @@ namespace WiktionaryDecodeTest1
             text = Regex.Replace(text, @"<br/?>", "/ ");
 
 
-            Regex rgx1 = new Regex(@"{{.*?}}");
             foreach (Match m in rgx1.Matches(text))
             {
                 string value = m.Groups[0].Value;
@@ -109,7 +110,6 @@ namespace WiktionaryDecodeTest1
                 text = rgx1.Replace(text, value, 1);
             }
 
-            Regex rgx2 = new Regex(@"\[\[.*?\]\]");
             foreach (Match m in rgx2.Matches(text))
             {
                 string value = m.Groups[0].Value;
@@ -123,7 +123,6 @@ namespace WiktionaryDecodeTest1
 
             text = Regex.Replace(text, "@{{|}}", "");
 
-            Regex rgx3 = new Regex(@"\'\'\'.*?\'\'\'");
             if (matchSense != "")
             {
                 string word = matchSense.Split('.')[0].Replace("_", " ");
@@ -236,19 +235,19 @@ namespace WiktionaryDecodeTest1
                 else
                     q = qTemp.ElementAt(1);
 
-                if (Regex.Match(q, @"{{.*?}}").Success)
+                if (Regex.IsMatch(q, @"{{.*?}}"))
                 {
                     q = Regex.Replace(q, @"{{|}}", "");
                     q = q.Split('|').Last();
                     q = Regex.Replace(q, @"passage=|text=", "");
                 }
             }
-            else if (Regex.Match(line, @"&lt;ref&gt;.*?&lt;/ref&gt;").Success)
+            else if (Regex.IsMatch(line, @"&lt;ref&gt;.*?&lt;/ref&gt;"))
             {
                 qTags = new string[1] { Regex.Match(line, @"&lt;ref&gt;(.*?)&lt;/ref&gt;").Groups[1].Value };
                 q = Regex.Replace(line, @"&lt;ref&gt;.*?&lt;/ref&gt;", "");
             }
-            else if (Regex.Match(line, "{{.*?}}").Success)
+            else if (Regex.IsMatch(line, "{{.*?}}"))
             {
                 qTags = new string[1] { Regex.Replace(line, "{{|}}", "") };
                 qTags = qTags.First().Trim().Split("|").Select(t => t.Trim());
@@ -261,7 +260,7 @@ namespace WiktionaryDecodeTest1
                 }
                 else
                 {
-                    qTemp = qTags.Where(t => !Regex.Match(t, "^.*?=").Success);
+                    qTemp = qTags.Where(t => !Regex.IsMatch(t, "^.*?="));
                     if (qTemp.Count() > 0)
                     {
                         q = qTemp.Last();
@@ -275,7 +274,7 @@ namespace WiktionaryDecodeTest1
             else
             {
                 line = Regex.Replace(line, @"(?<!\')\'{2}(?!\')", "\"");
-                if (Regex.Match(line, "\".*?\"").Success)
+                if (Regex.IsMatch(line, "\".*?\""))
                 {
                     q = Regex.Match(line, "\".*?\"").Groups[0].Value;
                     q = Regex.Replace(q, "\"", "");
@@ -303,7 +302,7 @@ namespace WiktionaryDecodeTest1
             {
                 if (line.StartsWith('#'))
                 {
-                    if (Regex.Match(line, @"#*?\*:").Success)
+                    if (Regex.IsMatch(line, @"#*?\*:"))
                     {
                         if (compressed.Count > 0)
                         {
@@ -343,18 +342,18 @@ namespace WiktionaryDecodeTest1
 
             foreach (string line in lines)
             {
-                if (Regex.Match(line, @"#*?: {{ux").Success)
+                if (Regex.IsMatch(line, @"#*?: {{ux"))
                 {
                     string? ex = ProcessExample(line);
                     if (ex != null)
                         sense.examples!.Add(ex);
                 }
-                else if (Regex.Match(line, @"#*?: {{syn").Success)
+                else if (Regex.IsMatch(line, @"#*?: {{syn"))
                 {
                     IEnumerable<string> syn = ProcessSynonym(line);
                     sense.synonyms.AddRange(syn);
                 }
-                else if (Regex.Match(line, @"#*?\* ").Success)
+                else if (Regex.IsMatch(line, @"#*?\* "))
                 {
                     (string? q, IEnumerable<string>? qTags) = ProcessQuotation(line);
                     if (q != null)
@@ -373,7 +372,7 @@ namespace WiktionaryDecodeTest1
             List<string> senseLines = new List<string>();
             foreach (string line in lines)
             {
-                if (Regex.Match(line, @"^#* ").Success)
+                if (Regex.IsMatch(line, @"^#* "))
                 {
                     if (inSense)
                         if (senseLines.Count > 0)
@@ -448,7 +447,7 @@ namespace WiktionaryDecodeTest1
 
             string? title = lines.Where(line => line.StartsWith("<title>")).Select(line => line.Replace("<title>", "").Replace("</title>", "")).FirstOrDefault();
 
-            if (title == null || Regex.Match(title, @"^\w*?:").Success) return null;
+            if (title == null || Regex.IsMatch(title, @"^\w*?:")) return null;
 
             List<string> tmpLines = new List<string>();
             foreach (string line in lines)
@@ -462,7 +461,7 @@ namespace WiktionaryDecodeTest1
             else lines = tmpLines;
 
             List<Sense>? tmpLanguages;
-            int langs_count = lines.Count(line => Regex.Match(line, @"^==[^=]*?==$").Success);
+            int langs_count = lines.Count(line => Regex.IsMatch(line, @"^==[^=]*?==$"));
 
             if (langs_count > 0)
             {
@@ -471,7 +470,7 @@ namespace WiktionaryDecodeTest1
                 string lang = "";
                 foreach (string line in lines)
                 {
-                    if (Regex.Match(line, @"^==[^=]*?==$").Success)
+                    if (Regex.IsMatch(line, @"^==[^=]*?==$"))
                     {
                         lang = line.Replace("==", "");
                         langLines = new List<string>();
@@ -575,7 +574,7 @@ namespace WiktionaryDecodeTest1
             return (senses, quotes, examples);
         }
 
-        public static (List<Sense> senses, List<Quotation> quotes, List<Example> examples) ReadWiktionary(string filename)
+        public static (List<Sense> senses, List<Quotation> quotes, List<Example> examples) ReadWiktionary(string filename, bool processed = false)
         {
             IEnumerable<string> f = File.ReadLines(filename);
 
@@ -584,20 +583,48 @@ namespace WiktionaryDecodeTest1
 
             List<Sense> senses = new List<Sense>();
 
-            foreach (string l in f)
+            if (processed)
             {
-                string line = l.Trim();
-                if (line == "<page>")
-                    isPage = true;
-                else if (line == "</page>")
+                using (StreamReader file = File.OpenText(@"E:\WiktionaryEnglishResult.json"))
                 {
-                    List<Sense>? s = ProcessPage(currPages);
-                    if (s != null) senses.AddRange(s);
-                    isPage = false;
-                    currPages = new List<string>();
+                    JsonSerializer serializer = new JsonSerializer
+                    {
+                        NullValueHandling = NullValueHandling.Ignore
+                    };
+                    senses = (List<Sense>)serializer.Deserialize(file, typeof(List<Sense>))!;
                 }
-                else
-                    if (isPage & line.Length > 0) currPages.Add(line);
+
+                Debug.WriteLine("DESERIALIZED!");
+            }
+            else
+            {
+                foreach (string l in f)
+                {
+                    string line = l.Trim();
+                    if (line == "<page>")
+                        isPage = true;
+                    else if (line == "</page>")
+                    {
+                        List<Sense>? s = ProcessPage(currPages);
+                        if (s != null) senses.AddRange(s);
+                        isPage = false;
+                        currPages = new List<string>();
+                    }
+                    else
+                        if (isPage & line.Length > 0) currPages.Add(line);
+                }
+
+                using (StreamWriter file = File.CreateText(@"E:\WiktionaryEnglishResult.json"))
+                {
+                    JsonSerializer serializer = new JsonSerializer
+                    {
+                        MissingMemberHandling = MissingMemberHandling.Error,
+                        NullValueHandling = NullValueHandling.Ignore
+                    };
+                    serializer.Serialize(file, senses);
+                }
+
+                Debug.WriteLine("SERIALIZED!");
             }
 
             return PostProcessing(senses);
