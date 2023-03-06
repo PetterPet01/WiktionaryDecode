@@ -1,6 +1,9 @@
-﻿using Newtonsoft.Json;
+﻿using FlatSharp;
 using System.Diagnostics;
+using System.IO.MemoryMappedFiles;
+//using System.Text.Json;
 using System.Text.RegularExpressions;
+using Wiktionary;
 
 namespace WiktionaryDecodeTest1
 {
@@ -16,59 +19,59 @@ namespace WiktionaryDecodeTest1
         }
     }
 
-    public class Sense
-    {
-        public string? senseId { get; set; }
-        public string word { get; set; }
-        public string gloss { get; set; }
-        public string pos { get; set; }
-        public List<string> tags { get; set; }
-        public List<string>? examples { get; set; }
-        public List<KeyValuePair<string, List<string>>>? quotations { get; set; }
-        public List<string> synonyms { get; set; }
-        public int depth { get; set; }
+    //public class Sense
+    //{
+    //    public string? senseId { get; set; }
+    //    public string word { get; set; }
+    //    public string gloss { get; set; }
+    //    public string pos { get; set; }
+    //    public List<string> tags { get; set; }
+    //    public List<string>? examples { get; set; }
+    //    public List<KeyValuePair<string, List<string>>>? quotations { get; set; }
+    //    public List<string> synonyms { get; set; }
+    //    public int depth { get; set; }
 
-        public Sense(string word, string gloss, string pos,
-            List<string> tags, List<string> examples,
-            List<KeyValuePair<string, List<string>>> quotations, List<string> synonyms,
-            int depth)
-        {
-            this.word = word;
-            this.gloss = gloss;
-            this.pos = pos;
-            this.tags = tags;
-            this.examples = examples;
-            this.quotations = quotations;
-            this.synonyms = synonyms;
-            this.depth = depth;
-        }
-    }
+    //    public Sense(string word, string gloss, string pos,
+    //        List<string> tags, List<string> examples,
+    //        List<KeyValuePair<string, List<string>>> quotations, List<string> synonyms,
+    //        int depth)
+    //    {
+    //        this.word = word;
+    //        this.gloss = gloss;
+    //        this.pos = pos;
+    //        this.tags = tags;
+    //        this.examples = examples;
+    //        this.quotations = quotations;
+    //        this.synonyms = synonyms;
+    //        this.depth = depth;
+    //    }
+    //}
 
-    public class Quotation
-    {
-        public string sentence { get; set; }
-        public string sentenceId { get; set; }
-        public List<string> attributes { get; set; }
+    //public class Quotation
+    //{
+    //    public string sentence { get; set; }
+    //    public string sentenceId { get; set; }
+    //    public List<string> attributes { get; set; }
 
-        public Quotation(string sentence, string sentenceId, List<string> attributes)
-        {
-            this.sentence = sentence;
-            this.sentenceId = sentenceId;
-            this.attributes = attributes;
-        }
-    }
+    //    public Quotation(string sentence, string sentenceId, List<string> attributes)
+    //    {
+    //        this.sentence = sentence;
+    //        this.sentenceId = sentenceId;
+    //        this.attributes = attributes;
+    //    }
+    //}
 
-    public class Example
-    {
-        public string sentence { get; set; }
-        public string sentenceId { get; set; }
+    //public class Example
+    //{
+    //    public string sentence { get; set; }
+    //    public string sentenceId { get; set; }
 
-        public Example(string sentence, string sentenceId)
-        {
-            this.sentence = sentence;
-            this.sentenceId = sentenceId;
-        }
-    }
+    //    public Example(string sentence, string sentenceId)
+    //    {
+    //        this.sentence = sentence;
+    //        this.sentenceId = sentenceId;
+    //    }
+    //}
 
     internal static class WiktionaryProcessor
     {
@@ -80,14 +83,14 @@ namespace WiktionaryDecodeTest1
             return LongestCommonSubstring.GetLongestCommonSubsequence(one, two, ignoreCase);
         }
 
-        static Regex rgx1 = new Regex(@"{{.*?}}", RegexOptions.Compiled);
+        static Regex rgx1 = new Regex(@"\{\{.*?\}\}", RegexOptions.Compiled);
         static Regex rgx2 = new Regex(@"\[\[.*?\]\]", RegexOptions.Compiled);
-        static Regex rgx3 = new Regex(@"\'\'\'.*?\'\'\'", RegexOptions.Compiled);
+        static Regex rgx3 = new Regex(@"'''.*?'''", RegexOptions.Compiled);
         static string CleanText(string text, string matchSense = "")
         {
             text = Regex.Replace(text, @"\[\[Category:.*?\]\]", "");
             text = Regex.Replace(text, @"\[\[File:.*?\]\]", "");
-            text = Regex.Replace(text, @"/ :*? \'\'\'Usage.*$", "");
+            text = Regex.Replace(text, @"/ :*? '''Usage.*$", "");
 
             text = Regex.Replace(text, @"&lt;", "<");
             text = Regex.Replace(text, @"&gt;", ">");
@@ -105,7 +108,7 @@ namespace WiktionaryDecodeTest1
             foreach (Match m in rgx1.Matches(text))
             {
                 string value = m.Groups[0].Value;
-                value = Regex.Replace(value, @"{{|}}", "");
+                value = Regex.Replace(value, @"\{\{|\}\}", "");
                 value = "(" + value.Trim().Split('|').Last() + ")";
                 text = rgx1.Replace(text, value, 1);
             }
@@ -121,7 +124,7 @@ namespace WiktionaryDecodeTest1
 
             text = Regex.Replace(text, @"\[\[|\]\]", "");
 
-            text = Regex.Replace(text, "@{{|}}", "");
+            text = Regex.Replace(text, @"\{\{|\}\}", "");
 
             if (matchSense != "")
             {
@@ -130,9 +133,9 @@ namespace WiktionaryDecodeTest1
                 foreach (Match m in matches)
                 {
                     string value = m.Groups[0].Value;
-                    value = Regex.Replace(value, @"\'\'\'", "");
+                    value = Regex.Replace(value, @"'''", "");
 
-                    if (value.Length > 0 && ((lcs(value, word, true).Length / value.Length) > MIN_MENTION_RATIO))
+                    if (value.Length > 0 && ((lcs(value.ToLower(), word, true).Length / value.Length) > MIN_MENTION_RATIO))
                         text = rgx3.Replace(text, "<WSD>" + value + "</WSD>", 1);
                     else
                         text = rgx3.Replace(text, value, 1);
@@ -140,9 +143,9 @@ namespace WiktionaryDecodeTest1
             }
 
             text = Regex.Replace(text, "’", "'");
-            text = Regex.Replace(text, @"&quot;", "\"");
-            text = Regex.Replace(text, @"(?<!\')\'{2}(?!\')", "\"");
-            text = Regex.Replace(text, @"&ldquo;|&rdquo;", "\"");
+            text = Regex.Replace(text, @"&quot;", @"""");
+            text = Regex.Replace(text, @"(?<!')'{2}(?!')", @"""");
+            text = Regex.Replace(text, @"&ldquo;|&rdquo;", @"""");
 
             text = string.Join(' ', text.Split(' ').Select(t => t.Trim()));
 
@@ -150,7 +153,7 @@ namespace WiktionaryDecodeTest1
             if (matchSense != "")
             {
                 string context = Regex.Replace(text, @"<WSD>.*?</WSD>", "");
-                if (text.Contains("<WSD>") && context.Contains(" "))
+                if (text.Contains("<WSD>") && context.Contains(' '))
                     return text;
                 else
                     return "";
@@ -161,16 +164,17 @@ namespace WiktionaryDecodeTest1
 
         static Sense GenerateSense(string word, string pos)
         {
-            Sense s = new(
-                word: word,
-                gloss: "",
-                pos: pos,
-                tags: new List<string>(),
-                examples: new List<string>(),
-                quotations: new List<KeyValuePair<string, List<string>>>(),
-                synonyms: new List<string>(),
-                depth: -1
-            );
+            Sense s = new Sense
+            {
+                word = word,
+                gloss = "",
+                pos = pos,
+                tags = new List<string>(),
+                examples = new List<string>(),
+                quotations = new List<RawQuotation>(),
+                synonyms = new List<string>(),
+                depth = -1
+            };
             return s;
         }
 
@@ -179,7 +183,7 @@ namespace WiktionaryDecodeTest1
             int depth = line.Length - line.TrimStart('#').Length;
             line = line.Trim('#').Trim();
 
-            string gloss = Regex.Replace(line, @"{{lb.*?}}", "").Trim();
+            string gloss = Regex.Replace(line, @"\{\{lb.*?\}\}", "").Trim();
             gloss = Regex.Replace(gloss, @"&lt;!--.*?--&gt;", "").Trim();
             gloss = CleanText(gloss);
 
@@ -187,17 +191,34 @@ namespace WiktionaryDecodeTest1
                 return (null, -1, null);
 
             List<string>? tags = null;
-            Match t = Regex.Match(line, "{{lb(.*?)}}");
+            Match t = Regex.Match(line, @"\{\{lb(.*?)\}\}");
             if (t.Success)
-                tags = t.Groups[1].Value.Trim().Split('|').Skip(1).ToList();
+            ////MODIFIED: Used an additional CleanText() to rid of artifacts
+            //tags = t.Groups[1].Value.Trim().Split('|').Skip(1).ToList();
+            {
+                tags = new List<string>();
+                string tmp = t.Groups[1].Value.Trim();
+                string[] split = Regex.Replace
+                    (
+                        tmp,
+                        @"\{\{(.*?)(\}\}|$)",
+                        m => m.Groups[1].Value.Split('|').Last()
+                    ).Split('|').Skip(1).ToArray();
+                for (int i = 1; i < split.Length; i++)
+                {
+                    string tag = CleanText(split[i]);
+                    if (tag != "_")
+                        tags.Add(tag);
+                }
+            }
 
             return (gloss, depth, tags);
         }
 
         static string? ProcessExample(string line)
         {
-            string ex = Regex.Replace(line, @"#*?: {{ux", "");
-            ex = Regex.Replace(ex, @"}}", "").Trim().Split('|').Last();
+            string ex = Regex.Replace(line, @"#*?: \{\{ux", "");
+            ex = Regex.Replace(ex, @"\}\}", "").Trim().Split('|').Last();
 
             if (ex.Length > CHAR_THRESHOLD && ex.Contains(' '))
                 return ex;
@@ -205,15 +226,28 @@ namespace WiktionaryDecodeTest1
                 return null;
         }
 
-        static IEnumerable<string> ProcessSynonym(string line)
+        static List<string> ProcessSynonym(string line)
         {
-            string synStr = Regex.Replace(line, @"#*?: {{syn", "");
-            IEnumerable<string> syn = Regex.Replace(synStr, "}}", "").Split('|').Skip(1);
-            if (syn.First() == "en")
-                syn = syn.Skip(1);
-            syn = syn.Where(s => !s.Contains("Thesaurus:"));
+            string synStr = Regex.Replace(line, @"#*?: \{\{syn", "");
+            IEnumerable<string> syn = Regex.Replace(synStr, @"\}\}", "").Split('|').Skip(1);
+            //if (syn.First() == "en")
+            //    syn = syn.Skip(1);
+            //syn = syn.Where(s => !s.Contains("Thesaurus:")).Select(s => Regex.Replace(CleanText(s), @"[^\p{L}-\s]+", "")).Where(s => s != "");
 
-            return syn;
+            List<string> res = new List<string>();
+            foreach (string s in syn)
+            {
+                string tmp = s;
+                if (!tmp.Contains("Thesaurus:"))
+                {
+                    if (!tmp.All(char.IsLetterOrDigit))
+                        tmp = Regex.Match(tmp, "\\[\\[(.*?)\\]\\]").Groups[1].Value;
+                    if (tmp != "" && tmp != "en" && tmp.Length > 1)
+                        res.Add(tmp);
+                }
+            }
+
+            return res;
         }
 
         static (string? q, IEnumerable<string>? qTags) ProcessQuotation(string line2)
@@ -235,9 +269,9 @@ namespace WiktionaryDecodeTest1
                 else
                     q = qTemp.ElementAt(1);
 
-                if (Regex.IsMatch(q, @"{{.*?}}"))
+                if (Regex.IsMatch(q, @"\{\{.*?\}\}"))
                 {
-                    q = Regex.Replace(q, @"{{|}}", "");
+                    q = Regex.Replace(q, @"\{\{|\}\}", "");
                     q = q.Split('|').Last();
                     q = Regex.Replace(q, @"passage=|text=", "");
                 }
@@ -247,9 +281,9 @@ namespace WiktionaryDecodeTest1
                 qTags = new string[1] { Regex.Match(line, @"&lt;ref&gt;(.*?)&lt;/ref&gt;").Groups[1].Value };
                 q = Regex.Replace(line, @"&lt;ref&gt;.*?&lt;/ref&gt;", "");
             }
-            else if (Regex.IsMatch(line, "{{.*?}}"))
+            else if (Regex.IsMatch(line, @"\{\{.*?\}\}"))
             {
-                qTags = new string[1] { Regex.Replace(line, "{{|}}", "") };
+                qTags = new string[1] { Regex.Replace(line, @"\{\{|\}\}", "") };
                 qTags = qTags.First().Trim().Split("|").Select(t => t.Trim());
 
                 IEnumerable<string> qTemp = qTags.Where(t => t.ToLower().StartsWith(quoteFlags));
@@ -273,12 +307,12 @@ namespace WiktionaryDecodeTest1
 
             else
             {
-                line = Regex.Replace(line, @"(?<!\')\'{2}(?!\')", "\"");
-                if (Regex.IsMatch(line, "\".*?\""))
+                line = Regex.Replace(line, @"(?<!')'{2}(?!')", @"""");
+                if (Regex.IsMatch(line, @""".*?"""))
                 {
-                    q = Regex.Match(line, "\".*?\"").Groups[0].Value;
-                    q = Regex.Replace(q, "\"", "");
-                    qTags = new string[1] { Regex.Replace(line, "\".*?\"", "") };
+                    q = Regex.Match(line, @""".*?""").Groups[0].Value;
+                    q = Regex.Replace(q, @"""", "");
+                    qTags = new string[1] { Regex.Replace(line, @""".*?""", "") };
                 }
                 else
                 {
@@ -334,30 +368,32 @@ namespace WiktionaryDecodeTest1
             if (gloss == null) return null;
 
             sense.gloss = gloss;
-            sense.depth = depth;
+            sense.depth = (sbyte)depth;
             if (tags != null)
-                sense.tags.AddRange(tags);
+                foreach (string tag in tags)
+                    sense.tags!.Add(tag);
 
             lines = CompressLines(lines.Skip(1));
 
             foreach (string line in lines)
             {
-                if (Regex.IsMatch(line, @"#*?: {{ux"))
+                if (Regex.IsMatch(line, @"#*?: \{\{ux"))
                 {
                     string? ex = ProcessExample(line);
                     if (ex != null)
                         sense.examples!.Add(ex);
                 }
-                else if (Regex.IsMatch(line, @"#*?: {{syn"))
+                else if (Regex.IsMatch(line, @"#*?: \{\{syn"))
                 {
                     IEnumerable<string> syn = ProcessSynonym(line);
-                    sense.synonyms.AddRange(syn);
+                    foreach (string synonym in syn)
+                        sense.synonyms!.Add(synonym);
                 }
                 else if (Regex.IsMatch(line, @"#*?\* "))
                 {
                     (string? q, IEnumerable<string>? qTags) = ProcessQuotation(line);
                     if (q != null)
-                        sense.quotations!.Add(new KeyValuePair<string, List<string>>(q, qTags!.ToList()));
+                        sense.quotations!.Add(new RawQuotation { quotation = q, quotationAttributes = qTags!.ToList() });
                 }
             }
 
@@ -447,6 +483,7 @@ namespace WiktionaryDecodeTest1
 
             string? title = lines.Where(line => line.StartsWith("<title>")).Select(line => line.Replace("<title>", "").Replace("</title>", "")).FirstOrDefault();
 
+            //.NET regex intepret \w differently
             if (title == null || Regex.IsMatch(title, @"^\w*?:")) return null;
 
             List<string> tmpLines = new List<string>();
@@ -518,7 +555,7 @@ namespace WiktionaryDecodeTest1
                 return string.Format("{0}.{1}", sense.word.ToLower().Replace(" ", "_"), sense.pos);
         }
 
-        public static (List<Sense> senses, List<Quotation> quotes, List<Example> examples) PostProcessing(List<Sense> senses)
+        public static (IList<Sense> senses, List<Quotation> quotes, List<Example> examples) PostProcessing(IList<Sense> senses)
         {
             List<Quotation> quotes = new List<Quotation>();
             List<Example> examples = new List<Example>();
@@ -538,17 +575,17 @@ namespace WiktionaryDecodeTest1
 
                 if (s.quotations!.Count > 0)
                 {
-                    foreach ((string x, List<string> attrib) in s.quotations)
+                    foreach (RawQuotation rq in s.quotations)
                     {
-                        string sent = CleanText(x, matchSense: sId);
+                        string sent = CleanText(rq.quotation!, matchSense: sId);
                         if (sent.Length > 0)
                         {
                             quotes.Add(new Quotation
-                            (
-                                sentence: sent,
-                                sentenceId: sId,
-                                attributes: attrib
-                            ));
+                            {
+                                sentence = sent,
+                                sentenceId = sId,
+                                attributes = rq.quotationAttributes
+                            });
                         }
                     }
                 }
@@ -560,10 +597,10 @@ namespace WiktionaryDecodeTest1
                         if (sent.Length > 0)
                         {
                             examples.Add(new Example
-                                (
-                                    sentence: sent,
-                                    sentenceId: sId
-                                ));
+                            {
+                                sentence = sent,
+                                sentenceId = sId
+                            });
                         }
                     }
 
@@ -574,30 +611,61 @@ namespace WiktionaryDecodeTest1
             return (senses, quotes, examples);
         }
 
-        public static (List<Sense> senses, List<Quotation> quotes, List<Example> examples) ReadWiktionary(string filename, bool processed = false)
+        //static JsonSerializerOptions options = new JsonSerializerOptions
+        //{
+        //    DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+        //};
+
+        public static unsafe (IList<Sense> senses, List<Quotation> quotes, List<Example> examples) ReadWiktionaryAsync(string filename, bool processed = false)
         {
-            IEnumerable<string> f = File.ReadLines(filename);
-
-            List<string> currPages = new List<string>();
-            bool isPage = false;
-
-            List<Sense> senses = new List<Sense>();
+            Senses senses = new Senses();
+            senses.senses = new List<Sense>();
 
             if (processed)
             {
-                using (StreamReader file = File.OpenText(@"E:\WiktionaryEnglishResult.json"))
+                long size = new FileInfo(filename).Length;
+
+                using (var mmf = MemoryMappedFile.CreateFromFile(filename, FileMode.Open))
                 {
-                    JsonSerializer serializer = new JsonSerializer
+                    using (var accessor = mmf.CreateViewAccessor(0, size))
                     {
-                        NullValueHandling = NullValueHandling.Ignore
-                    };
-                    senses = (List<Sense>)serializer.Deserialize(file, typeof(List<Sense>))!;
+                        byte* ptr = (byte*)0;
+                        accessor.SafeMemoryMappedViewHandle.AcquirePointer(ref ptr);
+
+                        var memory = new UnmanagedMemoryManager<byte>(ptr, (int)size).Memory;
+                        senses = Senses.Serializer.Parse(memory);
+
+                        accessor.SafeMemoryMappedViewHandle.ReleasePointer();
+                    }
                 }
+
+                //byte[] buffer = File.ReadAllBytes(filename);
+                //senses = Senses.Serializer.Parse(buffer);
+
+                //using (FileStream openStream = File.OpenRead(filename))
+                //{
+                //    senses =
+                //        (await JsonSerializer.DeserializeAsync<List<Sense>>(openStream))!;
+                //}
+
+                //using (JsonReader file = new JsonTextReader(File.OpenText(filename)))
+                //{
+                //    JsonSerializer serializer = new JsonSerializer
+                //    {
+                //        NullValueHandling = NullValueHandling.Ignore
+                //    };
+                //    senses = serializer.Deserialize<List<Sense>>(file)!;
+                //}
 
                 Debug.WriteLine("DESERIALIZED!");
             }
             else
             {
+                IEnumerable<string> f = File.ReadLines(filename);
+
+                List<string> currPages = new List<string>();
+                bool isPage = false;
+
                 foreach (string l in f)
                 {
                     string line = l.Trim();
@@ -606,7 +674,9 @@ namespace WiktionaryDecodeTest1
                     else if (line == "</page>")
                     {
                         List<Sense>? s = ProcessPage(currPages);
-                        if (s != null) senses.AddRange(s);
+                        if (s != null)
+                            foreach (Sense sense in s)
+                                senses.senses!.Add(sense);
                         isPage = false;
                         currPages = new List<string>();
                     }
@@ -614,20 +684,33 @@ namespace WiktionaryDecodeTest1
                         if (isPage & line.Length > 0) currPages.Add(line);
                 }
 
-                using (StreamWriter file = File.CreateText(@"E:\WiktionaryEnglishResult.json"))
-                {
-                    JsonSerializer serializer = new JsonSerializer
-                    {
-                        MissingMemberHandling = MissingMemberHandling.Error,
-                        NullValueHandling = NullValueHandling.Ignore
-                    };
-                    serializer.Serialize(file, senses);
-                }
+                int maxSize = Senses.Serializer.GetMaxSize(senses);
+
+                byte[] buffer = new byte[maxSize];
+                int bytesWritten = Senses.Serializer.Write(buffer, senses);
+
+                Debug.WriteLine(bytesWritten);
+                File.WriteAllBytes(@"E:\WiktionaryEnglishResult.bin", buffer);
+
+                //using (FileStream createStream = File.Create(@"E:\WiktionaryEnglishResult.json"))
+                //{
+                //    await JsonSerializer.SerializeAsync(createStream, senses, options);
+                //}
+
+                //using (StreamWriter file = File.CreateText(@"E:\WiktionaryEnglishResult.json"))
+                //{
+                //    JsonSerializer serializer = new JsonSerializer
+                //    {
+                //        MissingMemberHandling = MissingMemberHandling.Error,
+                //        NullValueHandling = NullValueHandling.Ignore
+                //    };
+                //    serializer.Serialize(file, senses);
+                //}
 
                 Debug.WriteLine("SERIALIZED!");
             }
 
-            return PostProcessing(senses);
+            return PostProcessing(senses.senses!);
         }
     }
 }
